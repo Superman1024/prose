@@ -11,23 +11,25 @@ import prose.fasta as fasta
 
 
 def embed_sequence(model, x, pool='none', use_cuda=False):
-    if len(x) == 0:
+    # `x` is the sequence wait to embedding
+
+    if len(x) == 0:  # unexpected situation
         n = model.embedding.proj.weight.size(1)
         z = np.zeros((1,n), dtype=np.float32)
-        return z
+        return z  # return an all zero array with full channel, length set to 1
 
-    alphabet = Uniprot21()
+    alphabet = Uniprot21()  # embedding model
     x = x.upper()
     # convert to alphabet index
     x = alphabet.encode(x)
-    x = torch.from_numpy(x)
+    x = torch.from_numpy(x)  # ndarray to tensor
     if use_cuda:
         x = x.cuda()
 
     # embed the sequence
     with torch.no_grad():
         x = x.long().unsqueeze(0)
-        z = model.transform(x)
+        z = model.transform(x)  # processed data
         # pool if needed
         z = z.squeeze(0)
         if pool == 'sum':
@@ -60,7 +62,7 @@ def main():
     if args.model == 'prose_mt':
         from prose.models.multitask import ProSEMT
         print('# loading the pre-trained ProSE MT model', file=sys.stderr)
-        model = ProSEMT.load_pretrained()
+        model = ProSEMT.load_pretrained()  # A static method
     elif args.model == 'prose_dlm':
         from prose.models.lstm import SkipLSTM
         print('# loading the pre-trained ProSE DLM model', file=sys.stderr)
@@ -68,7 +70,7 @@ def main():
     else:
         print('# loading model:', args.model, file=sys.stderr)
         model = torch.load(args.model)
-    model.eval()
+    model.eval()  # evaluation mode
 
     # set the device
     d = args.device
@@ -86,17 +88,39 @@ def main():
 
     pool = args.pool
     print('# embedding with pool={}'.format(pool), file=sys.stderr)
-    count = 0
-    with open(path, 'rb') as f:
-        for name,sequence in fasta.parse_stream(f):
-            pid = name.decode('utf-8')
-            z = embed_sequence(model, sequence, pool=pool, use_cuda=use_cuda)
-            # write as hdf5 dataset
-            h5.create_dataset(pid, data=z)
-            count += 1
-            print('# {} sequences processed...'.format(count), file=sys.stderr, end='\r')
+    # # origin code
+    # count = 0
+    # with open(path, 'rb') as f:
+    #     for name,sequence in fasta.parse_stream(f):
+    #         pid = name.decode('utf-8')
+    #         z = embed_sequence(model, sequence, pool=pool, use_cuda=use_cuda)
+    #         # write as hdf5 dataset
+    #         h5.create_dataset(pid, data=z)
+    #         count += 1
+    #         print('# {} sequences processed...'.format(count), file=sys.stderr, end='\r')
+
+    # mycode
+    # output may be something out of h5, if the size is acceptable
+
+    # parse txt file
+    # count = 0
+    with open(path, 'r') as f:
+        seq = f.readlines()
+    for i in range(len(seq)):
+        sequence = seq[i].strip()
+        name = ("protein_A_{}".format(i))
+
+        z = embed_sequence(model, sequence, pool=pool, use_cuda=use_cuda)
+        if i == 0:
+            print(z)
+        # write as hdf5 dataset
+        h5.create_dataset(name, data=z)
+
+        print('# {} sequences processed...'.format(i+1), file=sys.stderr, end='\r')
+
     print(' '*80, file=sys.stderr, end='\r')
 
 
 if __name__ == '__main__':
     main()
+    # python embed_sequences.py -o data/protein_1.h5 data/protein_1.txt

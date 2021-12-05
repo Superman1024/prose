@@ -24,14 +24,17 @@ class ProSEMT(nn.Module):
         from prose.models.lstm import SkipLSTM
         encoder = SkipLSTM(21, 21, 1024, 3)
         encoder.cloze = encoder.proj
+        # The final layer of cloze task is not needed anymore, change it to another linear layer
+        # with output channel = 100
 
         proj_in = encoder.proj.in_features
         proj = nn.Linear(proj_in, 100)
         encoder.proj = proj
         encoder.nout = 100
 
+        # protein structure related tasks, following the new linear layer with channel number 100
         scop_predict = OrdinalRegression(100, 5, compare=L1(), allow_insertions=False)
-        cmap_predict = BilinearContactMap(proj_in)
+        cmap_predict = BilinearContactMap(proj_in)  # Z W ZT + b
         model = ProSEMT(encoder, scop_predict, cmap_predict)
 
         state_dict = torch.load(path, map_location=torch.device('cpu'))
